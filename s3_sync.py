@@ -68,13 +68,12 @@ def get_arguments():
         if len(objectSource) == 2:
             if check_path_exists(objectSource[1]):
                 argumentsDict["source"] = {"bucket": objectSource[0], "object": objectSource[1]}
-        elif len(objectSource) == 1:    
+        elif len(objectSource) == 1:
             if check_path_exists(objectSource[0]):
-                argumentsDict["source"] = {"object": objectSource[1]}
+                argumentsDict["source"] = {"object": objectSource[0]}
         else:
             print("ERROR: too many split values on source")
-    except Exception as e:
-        print e
+    except IndexError:
         print("%s Requires two arguments to run, source not defined!" % argv[0])
         sys.exit(1)
     # Get destination bucket and or source
@@ -85,7 +84,7 @@ def get_arguments():
                 argumentsDict["destination"] = {"bucket": objectDestination[0], "object": objectDestination[1]}
         elif len(objectDestination) == 1:
             if check_path_exists(objectDestination[0]):
-                argumentsDict["destination"] = {"object": objectDestination[1]}
+                argumentsDict["destination"] = {"object": objectDestination[0]}
         else:
             print("ERROR: too many split values on destination")
     except IndexError:
@@ -95,9 +94,6 @@ def get_arguments():
 
 
 def main():
-    print(len(argv))
-    print(argv[1].split(":"))
-    print(argv[2])
 
     testDict = get_arguments()
 
