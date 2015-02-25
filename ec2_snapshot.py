@@ -21,7 +21,7 @@ def get_instance_id_from_instance_name(conn, instance_name):
     return instance_name, _instance
 
 
-def get_volume_from_instance_id(conn, instance_id):
+def get_volumes_from_instance(conn, instance_id):
     """
         Return a volume instance
     """
@@ -33,26 +33,45 @@ def get_volume_from_instance_id(conn, instance_id):
     return _attached_volumes
 
 
-def create_snapshot(conn, instance_tuple):
+def create_snapshot(conn, instance=None, snapshot_name=None, volume_id=None):
     """
-        Create snapshot of each volume attached to instance_id
+        Create snapshot using instance name or volume id
         Appends datetime (UTC) to instance name
     """
+    # TODO: for command line usage present a progress bar
+    # TODO: Tag snapshots with a name
     _datetime = datetime.utcnow().strftime("%Y-%m-%d-%H:%M:%S")
-    _volumes = get_volume_from_instance_id(conn, instance_tuple[1].id)
     # Create snapshot for each attached volume
-    for volume in _volumes:
-        # Get device name for volume snapshot
-        _device = volume.attach_data.device
-        _instance_name = "%s_%s_%s" % (volume.id, _device, _datetime)
-        conn.create_snapshot(volume[0], _instance_name)
+
+    def snapshot_volume(_volume, _snapshot_name=None):
+        if not _snapshot_name:
+            _snapshot_name = "%s_%s_%s" % (_volume.id, _volume.attach_data.device, _datetime)
+        else:
+            _snapshot_name = "%s_%s_%s" % (_snapshot_name, _volume.attach_data.device, _datetime)
+        snapshot = conn.create_snapshot(_volume.id, description=_snapshot_name)
+        snapshot.add_tag("Name", _snapshot_name)
+
+
+    if volume_id:
+        _volume = conn.get_all_volumes([volume_id])
+        snapshot_volume(_volume, snapshot_name)
+    else:
+        # TODO: These volumes for the same instance are going to have the same snapshot name - append device
+        _volumes = get_volumes_from_instance(conn, instance.id)
+        for volume in _volumes:
+            # Get device name for volume snapshot
+            #_device = volume.attach_data.device
+            snapshot_volume(volume, snapshot_name)
 
 
 def get_instance_tags(instance_id):
     _tags = conn.get_all_tags({'resource-id': instance_id})
     for tag in _tags:
         if not tag.name.startswith('aws:'):
-            print tag.name, tag.value
+            print("Instance Tags: %s: %s" % (tag.name, tag.value))
+
+def set_resource_tag(resource_id):
+    pass
 
 
 if __name__ == "__main__":
@@ -89,28 +108,9 @@ if __name__ == "__main__":
         if not arguments.secret_key:
             arguments.secret_key = config.get("awsCredentials", 'accessSecret')
     except IOError:
-        print("No configuration file: %s" % config_file)
+        print("Warning: No configuration file: %s\n" % config_file)
 
-    # Volume id OR instance name must be specified
-    if not arguments.volume_id and not arguments.instance_name:
-        print("%s: Volume ID (-i) or Instance Name (-n) must be specified." % sys.argv[0].split("/")[-1])
-        print(parser.print_help())
-        sys.exit(1)
-    if arguments.volume_id and arguments.instance_name:
-        print("%s: Volume ID (-i) or Instance Name (-n) only must be specified." % sys.argv[0].split("/")[-1])
-        print(parser.print_help())
-        sys.exit(1)
-
-    # Create snapshot
-    if arguments.snapshot_create:
-        if arguments.snapshot_name:
-            print("Creating snapshot with name: %s" % arguments.snapshot_name)
-        if arguments.volume_id:
-            print("Create snapshot from volume id: %s" % arguments.volume_id)
-    else:
-        print("Not creating snapshot")
-
-    # Test config
+    # Set region
     if arguments.region:
         arguments.region = return_region(arguments.region)
     else:
@@ -119,6 +119,29 @@ if __name__ == "__main__":
 
     # Make EC2 Connection
     conn = boto.ec2.EC2Connection(aws_access_key_id=arguments.access_id, aws_secret_access_key=arguments.secret_key, region=arguments.region)
+
+    # Volume id OR instance name must be specified
+    if not arguments.volume_id and not arguments.instance_name:
+        print("Error: %s: Volume ID (-i) or Instance Name (-n) must be specified.\n" % sys.argv[0].split("/")[-1])
+        print(parser.print_help())
+        sys.exit(1)
+    if arguments.volume_id and arguments.instance_name:
+        print("Error: %s: Volume ID (-i) or Instance Name (-n) only must be specified.\n" % sys.argv[0].split("/")[-1])
+        print(parser.print_help())
+        sys.exit(1)
+
+    # Create snapshot
+    if arguments.snapshot_create:
+        if arguments.instance_name:
+            print("Create snapshot from instance name: %s" % arguments.instance_name)
+            instance_tuple = get_instance_id_from_instance_name(conn, arguments.instance_name)
+            create_snapshot(conn, instance=instance_tuple[1], snapshot_name=instance_tuple[0])
+        if arguments.volume_id:
+            print("Create snapshot from volume id: %s" % arguments.volume_id)
+    else:
+        print("Not creating snapshot")
+
+
 
     # Possibly name snapshots monthly: weekly: daily: fortnightly:
 
@@ -129,10 +152,10 @@ if __name__ == "__main__":
         instance_name = ""
 
 
-    instance_tuple = get_instance_id_from_instance_name(conn, instance_name)
+    # instance_tuple = get_instance_id_from_instance_name(conn, instance_name)
 
     # create_snapshot(conn, instance_tuple)
-    get_instance_tags(instance_tuple[1].id)
+    # get_instance_tags(instance_tuple[1].id)
 
     #create_snapshot(conn, instance_tuple)
 
