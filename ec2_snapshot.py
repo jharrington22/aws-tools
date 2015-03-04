@@ -17,7 +17,11 @@ def get_instance_id_from_instance_name(conn, instance_name):
     """
         Return instance object from "name" tag
     """
-    _instance = conn.get_all_reservations(filters={"tag:Name": instance_name})[0].instances[0]
+    try:
+        _instance = conn.get_all_reservations(filters={"tag:Name": instance_name})[0].instances[0]
+    except IndexError:
+        print("No instnace with name: %s\n try -l to list instance names" % instance_name)
+        sys.exit(1)
     return instance_name, _instance
 
 
