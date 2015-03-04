@@ -58,7 +58,7 @@ def create_snapshot(conn, instance=None, snapshot_name=None, volume_id=None):
 
     if volume_id:
         _volume = conn.get_all_volumes([volume_id])
-        snapshot_volume(_volume, snapshot_name)
+        snapshot_volume(_volume[0], snapshot_name)
     else:
         # TODO: These volumes for the same instance are going to have the same snapshot name - append device
         _volumes = get_volumes_from_instance(conn, instance.id)
