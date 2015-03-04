@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import boto.ec2
 import argparse
 import ConfigParser
@@ -11,6 +12,21 @@ def return_region(region_name):
         Return region object
     """
     return boto.ec2.get_region(region_name)
+
+
+def update_progress(progress):
+    barLength = 100 # Modify this to change the length of the progress bar
+    status = ""
+    if not isinstance(progress, int):
+        progress = 0
+        status = "error: progress var must be int\r\n"
+    block = progress
+    if not progress == float(100):
+        text = "\rPercent: [{0}] {1}%".format("#"*block + "-"*(barLength-block), progress)
+    else:
+        text = "\rPercent: [{0}] {1}% {2}".format("#"*block + "-"*(barLength-block), progress, "Complete..\r\n")
+    sys.stdout.write(text)
+    sys.stdout.flush()
 
 
 def get_instance_id_from_instance_name(conn, instance_name):
@@ -37,7 +53,7 @@ def get_volumes_from_instance(conn, instance_id):
     return _attached_volumes
 
 
-def create_snapshot(conn, instance=None, snapshot_name=None, volume_id=None):
+def create_snapshot(conn, instance=None, snapshot_name=None, volume_id=None, progress=None):
     """
         Create snapshot using instance name or volume id
         Appends datetime (UTC) to instance name
@@ -54,8 +70,13 @@ def create_snapshot(conn, instance=None, snapshot_name=None, volume_id=None):
             _snapshot_name = "%s_%s_%s" % (_snapshot_name, _volume.attach_data.device, _datetime)
         snapshot = conn.create_snapshot(_volume.id, description=_snapshot_name)
         snapshot.add_tag("Name", _snapshot_name)
-
-
+        print("Started creating snapshot: %s" % snapshot)
+        if progress:
+            while not snapshot.status == "completed":
+                snapshot.update()
+                if not snapshot.progress == "":
+                    update_progress(int(snapshot.progress.strip("%")))
+                time.sleep(1)
     if volume_id:
         _volume = conn.get_all_volumes([volume_id])
         snapshot_volume(_volume[0], snapshot_name)
@@ -97,6 +118,8 @@ if __name__ == "__main__":
     parser.add_argument("--snapshot-name", action="store")
     parser.add_argument("--snapshot-delete", action="store_true")
     parser.add_argument("--snapshot-info", action="store_true")
+    # Diagnostics
+    parser.add_argument("--progress", "-p", action="store_true")
     arguments = parser.parse_args()
 
     # TODO: Prefer arguments over config file
@@ -139,9 +162,10 @@ if __name__ == "__main__":
         if arguments.instance_name:
             print("Create snapshot from instance name: %s" % arguments.instance_name)
             instance_tuple = get_instance_id_from_instance_name(conn, arguments.instance_name)
-            create_snapshot(conn, instance=instance_tuple[1], snapshot_name=instance_tuple[0])
+            create_snapshot(conn, instance=instance_tuple[1], snapshot_name=instance_tuple[0], progress=arguments.progress)
         if arguments.volume_id:
             print("Create snapshot from volume id: %s" % arguments.volume_id)
+            create_snapshot(conn, volume_id=arguments.volume_id, progress=arguments.progress)
     else:
         print("Not creating snapshot")
 
