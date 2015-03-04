@@ -63,6 +63,7 @@ def create_snapshot(conn, instance=None, snapshot_name=None, volume_id=None, pro
     _datetime = datetime.utcnow().strftime("%Y-%m-%d-%H:%M:%S")
     # Create snapshot for each attached volume
 
+
     def snapshot_volume(_volume, _snapshot_name=None):
         if not _snapshot_name:
             _snapshot_name = "%s_%s_%s" % (_volume.id, _volume.attach_data.device, _datetime)
@@ -89,11 +90,36 @@ def create_snapshot(conn, instance=None, snapshot_name=None, volume_id=None, pro
             snapshot_volume(volume, snapshot_name)
 
 
+def list_instance_details(verbose=False, instance_name=None):
+    """
+    Returns a tag or dict containing instance details
+    Name - Tag: Name
+    ID - Instance ID
+    Volumes - List of volume IDs
+    """
+    if instance_name:
+        _reservations = conn.get_all_reservations(filters={"tag:Name": instance_name})
+    else:
+        _reservations = conn.get_all_reservations()
+    for reservation in _reservations:
+        tag = get_instance_tags(reservation.instances[0].id)
+        if verbose:
+            instance_dict = {
+                "Name": tag["Name"],
+                "ID": reservation.instances[0].id,
+                "Volumes": get_volumes_from_instance(conn, reservation.instances[0].id)
+            }
+            yield instance_dict
+        else:
+            # get_instance_id_from_instance_name(conn, tag["Name"])
+            yield tag
+
+
 def get_instance_tags(instance_id):
     _tags = conn.get_all_tags({'resource-id': instance_id})
     for tag in _tags:
         if not tag.name.startswith('aws:'):
-            print("Instance Tags: %s: %s" % (tag.name, tag.value))
+            return {tag.name: tag.value}
 
 def set_resource_tag(resource_id):
     pass
@@ -119,6 +145,8 @@ if __name__ == "__main__":
     parser.add_argument("--snapshot-delete", action="store_true")
     parser.add_argument("--snapshot-info", action="store_true")
     # Diagnostics
+    parser.add_argument("--list-instances", "-l", action="store_true")
+    parser.add_argument("--verbose", "-v", action="store_true")
     parser.add_argument("--progress", "-p", action="store_true")
     arguments = parser.parse_args()
 
@@ -146,6 +174,19 @@ if __name__ == "__main__":
 
     # Make EC2 Connection
     conn = boto.ec2.EC2Connection(aws_access_key_id=arguments.access_id, aws_secret_access_key=arguments.secret_key, region=arguments.region)
+
+    if arguments.list_instances:
+        for instance_dict in list_instance_details(instance_name=arguments.instance_name, verbose=arguments.verbose):
+            if arguments.verbose:
+                for key in instance_dict.keys():
+                    if key == "Volumes":
+                        for volume in instance_dict[key]:
+                            print "Volume: %s, Device: %s" % (volume.id, volume.attach_data.device)
+                    else:
+                        print "%s: %s" % (key, instance_dict[key])
+            else:
+                print instance_dict["Name"]
+        sys.exit(0)
 
     # Volume id OR instance name must be specified
     if not arguments.volume_id and not arguments.instance_name:
