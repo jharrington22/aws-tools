@@ -58,12 +58,8 @@ def create_snapshot(conn, instance=None, snapshot_name=None, volume_id=None, pro
         Create snapshot using instance name or volume id
         Appends datetime (UTC) to instance name
     """
-    # TODO: for command line usage present a progress bar
-    # TODO: Tag snapshots with a name
     _datetime = datetime.utcnow().strftime("%Y-%m-%d-%H:%M:%S")
     # Create snapshot for each attached volume
-
-
     def snapshot_volume(_volume, _snapshot_name=None):
         if not _snapshot_name:
             _snapshot_name = "%s_%s_%s" % (_volume.id, _volume.attach_data.device, _datetime)
@@ -82,11 +78,8 @@ def create_snapshot(conn, instance=None, snapshot_name=None, volume_id=None, pro
         _volume = conn.get_all_volumes([volume_id])
         snapshot_volume(_volume[0], snapshot_name)
     else:
-        # TODO: These volumes for the same instance are going to have the same snapshot name - append device
         _volumes = get_volumes_from_instance(conn, instance.id)
         for volume in _volumes:
-            # Get device name for volume snapshot
-            #_device = volume.attach_data.device
             snapshot_volume(volume, snapshot_name)
 
 
@@ -115,15 +108,34 @@ def list_instance_details(verbose=False, instance_name=None):
             yield tag
 
 
+def snapshot_retention(description_format, identifier, retention):
+    def date_compare(snap1, snap2):
+        if snap1.start_time < snap2.start_time:
+            return -1
+        elif snap1.start_time == snap2.start_time:
+            return 0
+        return 1
+    period = description_format.split[1]
+    snapshots = conn.get_all_snapshots()
+    del_snapshots = []
+    for snapshot in snapshots:
+        if snapshot.description.startswith("aws-tools"):
+            # Build a dictionary with retention period and instance details
+            retention_details = dict(zip(description_format, snapshot.description.split("_")))
+            if retention_details["PERIOD"] == period and retention_details["INSTANCE"] == identifier:
+                del_snapshots.append(snapshot)
+    del_snapshots.sort(date_compare)
+    print del_snapshots
+
+
 def get_instance_tags(instance_id):
     _tags = conn.get_all_tags({'resource-id': instance_id})
     for tag in _tags:
         if not tag.name.startswith('aws:'):
             return {tag.name: tag.value}
 
-def set_resource_tag(resource_id):
-    pass
-
+hour_format = 'aws-tools_hourly_INSTANCE_DEVICE_TIME'
+day_format = 'aws-tools_daily_INSTANCE_DEVICE_TIME'
 
 if __name__ == "__main__":
     # Argument parser
@@ -191,12 +203,12 @@ if __name__ == "__main__":
     # Volume id OR instance name must be specified
     if not arguments.volume_id and not arguments.instance_name:
         print("Error: %s: Volume ID (-i) or Instance Name (-n) must be specified.\n" % sys.argv[0].split("/")[-1])
-        print(parser.print_help())
-        sys.exit(1)
+        #print(parser.print_help())
+        #sys.exit(1)
     if arguments.volume_id and arguments.instance_name:
         print("Error: %s: Volume ID (-i) or Instance Name (-n) only must be specified.\n" % sys.argv[0].split("/")[-1])
-        print(parser.print_help())
-        sys.exit(1)
+        #print(parser.print_help())
+        #sys.exit(1)
 
     # Create snapshot
     if arguments.snapshot_create:
@@ -209,23 +221,3 @@ if __name__ == "__main__":
             create_snapshot(conn, volume_id=arguments.volume_id, progress=arguments.progress)
     else:
         print("Not creating snapshot")
-
-
-
-    # Possibly name snapshots monthly: weekly: daily: fortnightly:
-
-    if arguments.instance_name:
-        instance_name = arguments.instance_name
-    else:
-        print("No instance name")
-        instance_name = ""
-
-
-    # instance_tuple = get_instance_id_from_instance_name(conn, instance_name)
-
-    # create_snapshot(conn, instance_tuple)
-    # get_instance_tags(instance_tuple[1].id)
-
-    #create_snapshot(conn, instance_tuple)
-
-
