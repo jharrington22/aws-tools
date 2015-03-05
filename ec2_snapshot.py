@@ -53,7 +53,7 @@ def get_volumes_from_instance(conn, instance_id):
     return _attached_volumes
 
 
-def create_snapshot(conn, instance=None, snapshot_name=None, volume_id=None, progress=None):
+def create_snapshot(conn, instance=None, snapshot_name=None, volume_id=None, progress=None, description_format=None):
     """
         Create snapshot using instance name or volume id
         Appends datetime (UTC) to instance name
@@ -62,11 +62,27 @@ def create_snapshot(conn, instance=None, snapshot_name=None, volume_id=None, pro
     # Create snapshot for each attached volume
     def snapshot_volume(_volume, _snapshot_name=None):
         if not _snapshot_name:
-            _snapshot_name = "%s_%s_%s" % (_volume.id, _volume.attach_data.device, _datetime)
+            # Add description format for snapshot retention
+            if description_format:
+                _description_format = description_format.split("_")
+                _description = _description_format[0] + "_" + _description_format[1] + "_" + _volume.id + "_" + _volume.attach_data.device + "_" + _datetime
+                _snapshot_name = _description
+            else:
+                _snapshot_name = "%s_%s_%s" % (_volume.id, _volume.attach_data.device, _datetime)
         else:
-            _snapshot_name = "%s_%s_%s" % (_snapshot_name, _volume.attach_data.device, _datetime)
+            if description_format:
+                _description_format = description_format.split("_")
+                _description = _description_format[0] + "_" + _description_format[1] + "_" + _snapshot_name + "_" + _volume.attach_data.device + "_" + _datetime
+                _snapshot_name = _description
+            else:
+                _snapshot_name = "%s_%s_%s" % (_snapshot_name, _volume.attach_data.device, _datetime)
         snapshot = conn.create_snapshot(_volume.id, description=_snapshot_name)
-        snapshot.add_tag("Name", _snapshot_name)
+        if description_format:
+            # Remove time for snapshot tag "Name"
+            _snapshot_name = "_".join(_snapshot_name.split("_")[:4])
+            snapshot.add_tag("Name", _snapshot_name)
+        else:
+            snapshot.add_tag("Name", _snapshot_name)
         print("Started creating snapshot: %s" % snapshot)
         if progress:
             while not snapshot.status == "completed":
@@ -144,6 +160,7 @@ if __name__ == "__main__":
     parser.add_argument("--access-id", "-a", action="store")
     parser.add_argument("--secret-key", "-s", action="store")
     # Retention arguments
+    parser.add_argument("--hours", action="store_true")
     parser.add_argument("--days", "-d", action="store")
     parser.add_argument("--weeks", "-w", action="store")
     parser.add_argument("--months", "-m", action="store")
@@ -215,7 +232,12 @@ if __name__ == "__main__":
         if arguments.instance_name:
             print("Create snapshot from instance name: %s" % arguments.instance_name)
             instance_tuple = get_instance_id_from_instance_name(conn, arguments.instance_name)
-            create_snapshot(conn, instance=instance_tuple[1], snapshot_name=instance_tuple[0], progress=arguments.progress)
+            if arguments.hours:
+                create_snapshot(conn, instance=instance_tuple[1], snapshot_name=instance_tuple[0], progress=arguments.progress, description_format=hour_format)
+            elif arguments.days:
+                create_snapshot(conn, instance=instance_tuple[1], snapshot_name=instance_tuple[0], progress=arguments.progress, description_format=day_format)
+            else:
+                create_snapshot(conn, instance=instance_tuple[1], snapshot_name=instance_tuple[0], progress=arguments.progress)
         if arguments.volume_id:
             print("Create snapshot from volume id: %s" % arguments.volume_id)
             create_snapshot(conn, volume_id=arguments.volume_id, progress=arguments.progress)
