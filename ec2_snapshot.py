@@ -15,6 +15,9 @@ def return_region(region_name):
 
 
 def update_progress(progress):
+    """
+        Progress bar to be used with create_snapshot()
+    """
     barLength = 100 # Modify this to change the length of the progress bar
     status = ""
     if not isinstance(progress, int):
