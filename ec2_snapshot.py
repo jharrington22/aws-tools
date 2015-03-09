@@ -260,6 +260,7 @@ if __name__ == "__main__":
     # Make EC2 Connection
     conn = boto.ec2.EC2Connection(aws_access_key_id=arguments.access_id, aws_secret_access_key=arguments.secret_key, region=arguments.region)
 
+    # Return a list of instances
     if arguments.list_instances:
         for instance_dict in list_instance_details(instance_name=arguments.instance_name, verbose=arguments.verbose):
             if arguments.verbose:
