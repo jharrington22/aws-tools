@@ -41,7 +41,7 @@ def get_instance_id_from_instance_name(conn, instance_name):
     except IndexError:
         print("No instnace with name: %s\n try -l to list instance names" % instance_name)
         sys.exit(1)
-    return instance_name, _instance
+    return {"Name": instance_name, "instance": _instance}
 
 
 def get_volumes_from_instance(conn, instance_id):
@@ -56,50 +56,88 @@ def get_volumes_from_instance(conn, instance_id):
     return _attached_volumes
 
 
-def create_snapshot(conn, instance=None, snapshot_name=None, volume_id=None, progress=None, description_format=None):
+def create_snapshot(conn, instance_id=None, volume_id=None, instance_name=None, snapshot_name=None, progress=None, description_format=None, retention=None):
     """
         Create snapshot using instance name or volume id
         Appends datetime (UTC) to instance name
+        instance = instance object
+        volume_id = Volume ID
+        instance_name = Name of instance (Tag: Name)
+        snapshot_name = Name for snapshot
+        progress = progress bar (not used yet)
+        description_format = enables retention
+        retention = dict with retention period and delta
     """
     _datetime = datetime.utcnow().strftime("%Y-%m-%d-%H:%M:%S")
     # Create snapshot for each attached volume
-    def snapshot_volume(_volume, _snapshot_name=None):
+    def progress_output(snapshot):
+        while not snapshot.status == "completed":
+            snapshot.update()
+            if not snapshot.progress == "":
+                update_progress(int(snapshot.progress.strip("%")))
+            time.sleep(1)
+    def snapshot_volume(_volume, _identifier, _snapshot_name=None):
+        """
+            _volume = volume instance
+            _identifier = Always set either volume_id, instance_id, instance_name
+            _snapshot_name = Set if specified on command line
+        """
         if not _snapshot_name:
-            # Add description format for snapshot retention
+            # Description format enables snapshot retention
             if description_format:
                 _description_format = description_format.split("_")
-                _description = _description_format[0] + "_" + _description_format[1] + "_" + _volume.id + "_" + _volume.attach_data.device + "_" + _datetime
-                _snapshot_name = _description
+                _description = _description_format[0] + "_" + retention["period"] + "_" + _identifier + "_" + _volume.attach_data.device + "_" + _datetime
+                # Remove time for snapshot name
+                _snapshot_name = "_".join(_description.split("_")[:4])
             else:
-                _snapshot_name = "%s_%s_%s" % (_volume.id, _volume.attach_data.device, _datetime)
+                _snapshot_name = "%s_%s_%s" % (_identifier, _volume.attach_data.device, _datetime)
+                _description = "%s_%s_%s" % (_identifier, _volume.attach_data.device, _datetime)
         else:
             if description_format:
                 _description_format = description_format.split("_")
-                _description = _description_format[0] + "_" + _description_format[1] + "_" + _snapshot_name + "_" + _volume.attach_data.device + "_" + _datetime
-                _snapshot_name = _description
+                _description = _description_format[0] + "_" + retention["period"] + "_" + _snapshot_name + "_" + _volume.attach_data.device + "_" + _datetime
             else:
-                _snapshot_name = "%s_%s_%s" % (_snapshot_name, _volume.attach_data.device, _datetime)
-        snapshot = conn.create_snapshot(_volume.id, description=_snapshot_name)
-        if description_format:
-            # Remove time for snapshot tag "Name"
-            _snapshot_name = "_".join(_snapshot_name.split("_")[:4])
-            snapshot.add_tag("Name", _snapshot_name)
-        else:
-            snapshot.add_tag("Name", _snapshot_name)
+                _description = _snapshot_name
+        # Create snapshot
+        snapshot = conn.create_snapshot(_volume.id, description=_description)
+        # TODO: Do i need to wait here?
+        time.sleep(5)
+        # Add snapshot name
+        snapshot.add_tag("Name", _snapshot_name)
         print("Started creating snapshot: %s" % snapshot)
         if progress:
-            while not snapshot.status == "completed":
-                snapshot.update()
-                if not snapshot.progress == "":
-                    update_progress(int(snapshot.progress.strip("%")))
-                time.sleep(1)
+            progress_output(snapshot)
+    # Create snapshot
     if volume_id:
-        _volume = conn.get_all_volumes([volume_id])
-        snapshot_volume(_volume[0], snapshot_name)
-    else:
+        try:
+            _volume = conn.get_all_volumes([volume_id])
+        except boto.exception.EC2ResponseError:
+            print("ERROR: No Volume ID: %s" % volume_id)
+            sys.exit(1)
+        identifier = volume_id
+        snapshot_volume(_volume[0], identifier, snapshot_name)
+    elif instance_id:
+        try:
+            instance = conn.get_only_instances([instance_id])[0]
+        except boto.exception.EC2ResponseError:
+            print("ERROR: No Instance ID: %s" % instance_id)
+            sys.exit(1)
         _volumes = get_volumes_from_instance(conn, instance.id)
+        identifier = instance.id
         for volume in _volumes:
-            snapshot_volume(volume, snapshot_name)
+            snapshot_volume(volume, identifier, snapshot_name)
+    elif instance_name:
+        instance_dict = get_instance_id_from_instance_name(conn, arguments.instance_name)
+        _volumes = get_volumes_from_instance(conn, instance_dict["instance"].id)
+        identifier = instance_name
+        for volume in _volumes:
+            snapshot_volume(volume, identifier, snapshot_name)
+    else:
+        print("Not enough arguments for create_snapshot()")
+        sys.exit(1)
+    # Run backup retention
+    if description_format:
+        snapshot_retention(description_format, identifier, retention)
 
 
 def list_instance_details(verbose=False, instance_name=None):
@@ -128,23 +166,39 @@ def list_instance_details(verbose=False, instance_name=None):
 
 
 def snapshot_retention(description_format, identifier, retention):
+    """````
+    identifier = snapshot_name or volume id
+    retention = dict of period and delta
+    """
     def date_compare(snap1, snap2):
+        """ Sort snapshots oldest to newest """
         if snap1.start_time < snap2.start_time:
             return -1
         elif snap1.start_time == snap2.start_time:
             return 0
         return 1
-    period = description_format.split[1]
     snapshots = conn.get_all_snapshots()
     del_snapshots = []
     for snapshot in snapshots:
         if snapshot.description.startswith("aws-tools"):
             # Build a dictionary with retention period and instance details
-            retention_details = dict(zip(description_format, snapshot.description.split("_")))
-            if retention_details["PERIOD"] == period and retention_details["INSTANCE"] == identifier:
+            retention_details = dict(zip(description_format.split("_"), snapshot.description.split("_")))
+            if retention_details["PERIOD"] == retention["period"] and retention_details["INSTANCE"] == identifier:
                 del_snapshots.append(snapshot)
     del_snapshots.sort(date_compare)
-    print del_snapshots
+    # delete the first x snapshots leaving the retention amount.
+    # list [ old -> new ]
+    # Delete none if there are not enough snapshots
+    if len(del_snapshots) > retention[retention["period"]]:
+        delete = len(del_snapshots) - retention[retention["period"]]
+    else:
+        delete = 0
+    print("Snapshots available to delete: %s, Number of snapshots to keep: %s, Number of snapshots to delete: %s") % (len(del_snapshots), retention[retention["period"]], delete)
+    print("Available snapshots to delete (ID's): %s" % del_snapshots)
+    print("Deleting snapshots..")
+    for i in range(delete):
+        del_snapshots[i].delete()
+        print("\tDeleted: %s" % del_snapshots[i])
 
 
 def get_instance_tags(instance_id):
@@ -153,8 +207,6 @@ def get_instance_tags(instance_id):
         if not tag.name.startswith('aws:'):
             return {tag.name: tag.value}
 
-hour_format = 'aws-tools_hourly_INSTANCE_DEVICE_TIME'
-day_format = 'aws-tools_daily_INSTANCE_DEVICE_TIME'
 
 if __name__ == "__main__":
     # Argument parser
@@ -163,12 +215,13 @@ if __name__ == "__main__":
     parser.add_argument("--access-id", "-a", action="store")
     parser.add_argument("--secret-key", "-s", action="store")
     # Retention arguments
-    parser.add_argument("--hours", action="store_true")
+    parser.add_argument("--hours", action="store")
     parser.add_argument("--days", "-d", action="store")
     parser.add_argument("--weeks", "-w", action="store")
     parser.add_argument("--months", "-m", action="store")
     # Instance identification
     parser.add_argument("--volume-id", "-i", action="store")
+    parser.add_argument("--instance-id", action="store")
     parser.add_argument("--instance-name", "-n", action="store")
     parser.add_argument("--region", "-r", action="store")
     # Snapshot options
@@ -182,8 +235,8 @@ if __name__ == "__main__":
     parser.add_argument("--progress", "-p", action="store_true")
     arguments = parser.parse_args()
 
-    # TODO: Prefer arguments over config file
     # Load local config file location if it exists
+    # Prefers command line arguments to config file if specified
     config_file = '~/.aws_tools.cfg'
     try:
         config_file = os.path.expanduser(config_file)
@@ -221,28 +274,54 @@ if __name__ == "__main__":
         sys.exit(0)
 
     # Volume id OR instance name must be specified
-    if not arguments.volume_id and not arguments.instance_name:
-        print("Error: %s: Volume ID (-i) or Instance Name (-n) must be specified.\n" % sys.argv[0].split("/")[-1])
-        #print(parser.print_help())
-        #sys.exit(1)
-    if arguments.volume_id and arguments.instance_name:
-        print("Error: %s: Volume ID (-i) or Instance Name (-n) only must be specified.\n" % sys.argv[0].split("/")[-1])
+    if not arguments.volume_id and not arguments.instance_name and not arguments.instance_id:
+        print("Error: %s: Volume ID (--volume-id), Instance ID (--instance-id) or Instance Name (-n) must be specified.\n" % sys.argv[0].split("/")[-1])
         #print(parser.print_help())
         #sys.exit(1)
 
     # Create snapshot
     if arguments.snapshot_create:
+        # Setup retention
+        if arguments.hours:
+            # Hourly retention is enabled
+            retention = {"period": "hourly", "hourly": int(arguments.hours)}
+            retention_format = 'aws-tools_PERIOD_INSTANCE_DEVICE_TIME'
+        elif arguments.days:
+            # Daily Retention is enabled
+            retention = {"period": "days", "days": arguments.days}
+            retention_format = 'aws-tools_PERIOD_INSTANCE_DEVICE_TIME'
+        elif arguments.weeks:
+            # Weekly retention is enabled
+            retention = {"period": "weeks", "weeks": arguments.days}
+            retention_format = 'aws-tools_PERIOD_INSTANCE_DEVICE_TIME'
+        elif arguments.months:
+            # Monthly retention is enabled
+            retention = {"period": "months", "months": arguments.days}
+            retention_format = 'aws-tools_PERIOD_INSTANCE_DEVICE_TIME'
+        else:
+            retention_format = None
+            retention = None
         if arguments.instance_name:
             print("Create snapshot from instance name: %s" % arguments.instance_name)
-            instance_tuple = get_instance_id_from_instance_name(conn, arguments.instance_name)
-            if arguments.hours:
-                create_snapshot(conn, instance=instance_tuple[1], snapshot_name=instance_tuple[0], progress=arguments.progress, description_format=hour_format)
-            elif arguments.days:
-                create_snapshot(conn, instance=instance_tuple[1], snapshot_name=instance_tuple[0], progress=arguments.progress, description_format=day_format)
-            else:
-                create_snapshot(conn, instance=instance_tuple[1], snapshot_name=instance_tuple[0], progress=arguments.progress)
+            # Create snapshot with retention
+            create_snapshot(conn,
+                            instance_name=arguments.instance_name,
+                            description_format=retention_format,
+                            retention=retention
+                            )
         if arguments.volume_id:
             print("Create snapshot from volume id: %s" % arguments.volume_id)
-            create_snapshot(conn, volume_id=arguments.volume_id, progress=arguments.progress)
+            create_snapshot(conn,
+                            volume_id=arguments.volume_id,
+                            description_format=retention_format,
+                            retention=retention
+                            )
+        if arguments.instance_id:
+            print("Create snapshot from volume id: %s" % arguments.instance_id)
+            create_snapshot(conn,
+                            instance_id=arguments.instance_id,
+                            description_format=retention_format,
+                            retention=retention
+                            )
     else:
         print("Not creating snapshot")
