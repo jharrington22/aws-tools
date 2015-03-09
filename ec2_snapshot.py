@@ -254,8 +254,8 @@ if __name__ == "__main__":
     if arguments.region:
         arguments.region = return_region(arguments.region)
     else:
-        print("No region name")
-        region_name = ""
+        print("Error: No region name")
+        sys.exit(1)
 
     # Make EC2 Connection
     conn = boto.ec2.EC2Connection(aws_access_key_id=arguments.access_id, aws_secret_access_key=arguments.secret_key, region=arguments.region)
