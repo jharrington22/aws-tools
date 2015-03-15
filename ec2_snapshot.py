@@ -168,7 +168,7 @@ def list_instance_details(verbose=False, instance_name=None):
 def snapshot_retention(description_format, identifier, retention):
     """````
     identifier = snapshot_name or volume id
-    retention = dict of period and delta
+    retention = dict of period and time delta
     """
     def date_compare(snap1, snap2):
         """ Sort snapshots oldest to newest """
@@ -185,20 +185,35 @@ def snapshot_retention(description_format, identifier, retention):
             retention_details = dict(zip(description_format.split("_"), snapshot.description.split("_")))
             if retention_details["PERIOD"] == retention["period"] and retention_details["INSTANCE"] == identifier:
                 del_snapshots.append(snapshot)
-    del_snapshots.sort(date_compare)
-    # delete the first x snapshots leaving the retention amount.
-    # list [ old -> new ]
-    # Delete none if there are not enough snapshots
-    if len(del_snapshots) > retention[retention["period"]]:
-        delete = len(del_snapshots) - retention[retention["period"]]
-    else:
-        delete = 0
-    print("Snapshots available to delete: %s, Number of snapshots to keep: %s, Number of snapshots to delete: %s") % (len(del_snapshots), retention[retention["period"]], delete)
-    print("Available snapshots to delete (ID's): %s" % del_snapshots)
-    print("Deleting snapshots..")
-    for i in range(delete):
-        del_snapshots[i].delete()
-        print("\tDeleted: %s" % del_snapshots[i])
+    available_volumes = []
+    # Match period, instance and device (otherwise for instances with more than one device all devices would be considered)
+    # Build a list of volumes in the available snapshots
+    for snapshot in del_snapshots:
+        _device = snapshot.description.split("_")[3]
+        if not _device in available_volumes:
+            available_volumes.append(_device)
+    if len(available_volumes) > 1:
+        print("%s has %s volumes attached" % (identifier, len(available_volumes)))
+    # Build a list of snapshots to delete based on device name (Handles instance that have more than 1 device)
+    for _volume in available_volumes:
+        _del_snapshots = []
+        for snapshot in del_snapshots:
+            if snapshot.description.split("_")[3] == _volume:
+                _del_snapshots.append(snapshot)
+            _del_snapshots.sort(date_compare)
+            # delete the first x snapshots leaving the retention amount.
+            # list [ old -> new ]
+            # Delete none if there are not enough snapshots
+            if len(_del_snapshots) > retention[retention["period"]]:
+                delete = len(_del_snapshots) - retention[retention["period"]]
+            else:
+                delete = 0
+            print("Snapshots available to delete: %s, Number of snapshots to keep: %s, Number of snapshots to delete: %s, Device: %s") % (len(_del_snapshots), retention[retention["period"]], delete, _volume)
+            print("Available snapshots to delete (ID's): %s" % _del_snapshots)
+            print("Deleting snapshots..")
+            for i in range(delete):
+                _del_snapshots[i].delete()
+                print("\tDeleted: %s" % _del_snapshots[i])
 
 
 def get_instance_tags(instance_id):
