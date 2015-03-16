@@ -309,11 +309,11 @@ if __name__ == "__main__":
             retention_format = 'aws-tools_PERIOD_INSTANCE_DEVICE_TIME'
         elif arguments.weeks:
             # Weekly retention is enabled
-            retention = {"period": "weeks", "weekly": int(arguments.weeks)}
+            retention = {"period": "weekly", "weekly": int(arguments.weeks)}
             retention_format = 'aws-tools_PERIOD_INSTANCE_DEVICE_TIME'
         elif arguments.months:
             # Monthly retention is enabled
-            retention = {"period": "months", "monthly": int(arguments.months)}
+            retention = {"period": "monthly", "monthly": int(arguments.months)}
             retention_format = 'aws-tools_PERIOD_INSTANCE_DEVICE_TIME'
         else:
             retention_format = None
