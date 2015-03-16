@@ -104,7 +104,7 @@ def create_snapshot(conn, instance_id=None, volume_id=None, instance_name=None, 
         time.sleep(5)
         # Add snapshot name
         snapshot.add_tag("Name", _snapshot_name)
-        print("Started creating snapshot: %s" % snapshot)
+        print("Creating snapshot: %s" % snapshot)
         if progress:
             progress_output(snapshot)
     # Create snapshot
@@ -167,7 +167,7 @@ def list_instance_details(verbose=False, instance_name=None):
 
 def snapshot_retention(description_format, identifier, retention):
     """````
-    identifier = snapshot_name or volume id
+    identifier = instance name, volume id, instance id
     retention = dict of period and time delta
     """
     def date_compare(snap1, snap2):
@@ -201,19 +201,20 @@ def snapshot_retention(description_format, identifier, retention):
             if snapshot.description.split("_")[3] == _volume:
                 _del_snapshots.append(snapshot)
             _del_snapshots.sort(date_compare)
-            # delete the first x snapshots leaving the retention amount.
-            # list [ old -> new ]
-            # Delete none if there are not enough snapshots
-            if len(_del_snapshots) > retention[retention["period"]]:
-                delete = len(_del_snapshots) - retention[retention["period"]]
-            else:
-                delete = 0
-            print("Snapshots available to delete: %s, Number of snapshots to keep: %s, Number of snapshots to delete: %s, Device: %s") % (len(_del_snapshots), retention[retention["period"]], delete, _volume)
-            print("Available snapshots to delete (ID's): %s" % _del_snapshots)
-            print("Deleting snapshots..")
-            for i in range(delete):
-                _del_snapshots[i].delete()
-                print("\tDeleted: %s" % _del_snapshots[i])
+        # delete the first x snapshots leaving the retention amount.
+        # list [ old -> new ]
+        # Delete none if there are not enough snapshots
+        if len(_del_snapshots) > retention[retention["period"]]:
+            delete = len(_del_snapshots) - retention[retention["period"]]
+        else:
+            delete = 0
+        print("Available snapshots for volume %s: %s" % (_volume, len(_del_snapshots)))
+        print("Snapshots available to delete: %s, Number of snapshots to keep: %s, Number of snapshots to delete: %s, Device: %s") % (len(_del_snapshots), retention[retention["period"]], delete, _volume)
+        #print("Available snapshots to delete (ID's): %s" % _del_snapshots)
+        print("Deleting snapshots..")
+        for i in range(delete):
+            _del_snapshots[i].delete()
+            print("\tDeleted: %s" % _del_snapshots[i])
 
 
 def get_instance_tags(instance_id):
@@ -304,15 +305,15 @@ if __name__ == "__main__":
             retention_format = 'aws-tools_PERIOD_INSTANCE_DEVICE_TIME'
         elif arguments.days:
             # Daily Retention is enabled
-            retention = {"period": "days", "days": arguments.days}
+            retention = {"period": "daily", "daily": int(arguments.days)}
             retention_format = 'aws-tools_PERIOD_INSTANCE_DEVICE_TIME'
         elif arguments.weeks:
             # Weekly retention is enabled
-            retention = {"period": "weeks", "weeks": arguments.days}
+            retention = {"period": "weeks", "weekly": int(arguments.weeks)}
             retention_format = 'aws-tools_PERIOD_INSTANCE_DEVICE_TIME'
         elif arguments.months:
             # Monthly retention is enabled
-            retention = {"period": "months", "months": arguments.days}
+            retention = {"period": "months", "monthly": int(arguments.months)}
             retention_format = 'aws-tools_PERIOD_INSTANCE_DEVICE_TIME'
         else:
             retention_format = None
