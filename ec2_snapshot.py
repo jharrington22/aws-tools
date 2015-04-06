@@ -228,27 +228,27 @@ if __name__ == "__main__":
     # Argument parser
     parser = argparse.ArgumentParser(description="EC2 snapshot tool", usage='%(prog)s [options]')
     # Authentication Arguments
-    parser.add_argument("--access-id", "-a", action="store")
-    parser.add_argument("--secret-key", "-s", action="store")
+    parser.add_argument("--access-id", "-a", action="store", help="AWS Access Key [optional]")
+    parser.add_argument("--secret-key", "-s", action="store", help="AWS Secret Key [optional]")
     # Retention arguments
-    parser.add_argument("--hours", action="store")
-    parser.add_argument("--days", "-d", action="store")
-    parser.add_argument("--weeks", "-w", action="store")
-    parser.add_argument("--months", "-m", action="store")
+    parser.add_argument("--hours", action="store", help="Hourly retention [optional]")
+    parser.add_argument("--days", "-d", action="store", help="Daily retention [optional]")
+    parser.add_argument("--weeks", "-w", action="store", help="Weekly retention [optional]")
+    parser.add_argument("--months", "-m", action="store", help="Monthly retention [optional]")
     # Instance identification
-    parser.add_argument("--volume-id", "-i", action="store")
-    parser.add_argument("--instance-id", action="store")
-    parser.add_argument("--instance-name", "-n", action="store")
-    parser.add_argument("--region", "-r", action="store")
+    parser.add_argument("--volume-id", "-i", action="store", help="Volume ID [optional]")
+    parser.add_argument("--instance-id", action="store", help="EC2 Instance ID [optional]")
+    parser.add_argument("--instance-name", "-n", action="store", help="EC2 Instance Name [optional]")
+    parser.add_argument("--region", "-r", action="store", help="AWS Region [optional]")
     # Snapshot options
-    parser.add_argument("--snapshot-create", "-c", action="store_true")
-    parser.add_argument("--snapshot-name", action="store")
-    parser.add_argument("--snapshot-delete", action="store_true")
-    parser.add_argument("--snapshot-info", action="store_true")
+    parser.add_argument("--snapshot-create", "-c", action="store_true", help="Create a snapshot [optional]")
+    parser.add_argument("--snapshot-name", action="store", help="Specify a custom name for your snapshot [optional]")
+    parser.add_argument("--snapshot-delete", action="store", help="Delete snapshot [optional]")
+    parser.add_argument("--snapshot-info", action="store_true", help="Output information on snapshot ID [optional]")
     # Diagnostics
-    parser.add_argument("--list-instances", "-l", action="store_true")
-    parser.add_argument("--verbose", "-v", action="store_true")
-    parser.add_argument("--progress", "-p", action="store_true")
+    parser.add_argument("--list-instances", "-l", action="store_true", help="List all instances with associated account [optional]")
+    parser.add_argument("--verbose", "-v", action="store_true", help="More verbose output [optional]")
+    parser.add_argument("--progress", "-p", action="store_true", help="Output a progress bar when taking snapshot [optional]")
     arguments = parser.parse_args()
 
     # Load local config file location if it exists
