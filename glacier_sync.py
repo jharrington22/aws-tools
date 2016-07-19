@@ -6,14 +6,19 @@ import json
 import argparse
 import ConfigParser
 from boto import glacier
+import boto.sdb
 from datetime import datetime
 
 
 # Get parsed arguments
 parser = argparse.ArgumentParser(description='AWS Glacier tool')
-parser.add_argument('-c', action="store_true", dest="check_jobs")
+parser.add_argument('-c', '--check-job', action="store", help="Check specified job ID")
 parser.add_argument('-r', action="store_true", dest="retrieve_job_status")
 parser.add_argument('-j', action="store", dest="job_id")
+parser.add_argument('-v', '--vault-name', action="store", help="Valut name")
+parser.add_argument('-l', '--list-inventory', action="store_true", help="List inventory")
+parser.add_argument('-s', '--sns-topic', action="store", help="SNS Topic")
+
 args = parser.parse_args()
 
 
@@ -44,8 +49,9 @@ def create_job_dict(id, created, status, completed):
     return job_dict
 
 
-def request_vault_inventory(vault, sns_topic, archive_json):
+def request_vault_inventory(vault, sns_topic, archive_json=None):
     """Request vault inventory list, return False if there is an error"""
+    print("Requesting vault %s inventory..." % vault)
     create_date = datetime.now()
     status = False
     completed = False
@@ -163,14 +169,6 @@ def update_job_glacier_archive(job_dict, glacier_archive):
     return glacier_archive
 
 def main():
-
-    # Vault name
-    vault_name = ""
-
-    # SNS Topic
-    sns_topic = ""
-
-
     # Get regions
     regions = glacier.regions()
 
@@ -179,13 +177,20 @@ def main():
 
     glacier_layer2 = boto.glacier.layer2.Layer2(aws_access_key, aws_secret_key, region=regions[2])
 
+
+    # Vault name
+    vault = glacier_layer2.get_vault(args.vault_name)
+
+    # SNS Topic
+    sns_topic = args.sns_topic
+    
     #print glacier_layer1.list_vaults()["VaultList"][0]
 
     #print check_job_id(glacier_layer2)
 
     #print glacier_connection.list_vaults()
 
-    glacier_archive = load_archive_data(cache_file)
+    # glacier_archive = load_archive_data(cache_file)
 
     # job_dict = request_vault_inventory(vault=get_vault(glacier_layer2, vault_name),
     #                              sns_topic=sns_topic,
@@ -196,27 +201,32 @@ def main():
     #     print("No job dict")
 
     # Set Job ID
-    job_id = args.job_id
+    # job_id = args.job_id
 
     #print(glacier_archive)
 
-    if not job_id is None:
-        print("Job to check: %s" % job_id)
-        if check_job_id(glacier_layer1, vault_name, job_id=job_id):
-            get_job(glacier_layer1, vault_name, job_id)
+    # if not job_id is None:
+    #     print("Job to check: %s" % job_id)
+    #     if check_job_id(glacier_layer1, vault_name, job_id=job_id):
+    #         get_job(glacier_layer1, vault_name, job_id)
+    # 
+    # 
+    # if args.check_jobs:
+    #     check_job_id(glacier_layer1, vault_name, archive_json=glacier_archive)
+    
+    if args.list_inventory:
+        request_vault_inventory(vault, sns_topic)
 
-
-    if args.check_jobs:
-        check_job_id(glacier_layer1, vault_name, archive_json=glacier_archive)
-
-
+    if args.check_job:
+        print("Checking jobs")
+        print vault.list_jobs()
     #print json.dumps(check_job_id(glacier_instance, vault_name, job_id), indent=2)
 
     #print vault.get_job("rnTR1mM1ChN8MPexEllGKqsiRfVJkfjE5vLqVzwcuRha2YbZ4afXDDt9d4N8MPexEllGKqsEMYO7AzMEpQ")
 
     #print vault.upload_archive(file)
 
-    save_archive_data(glacier_archive, cache_file)
+    # save_archive_data(glacier_archive, cache_file)
 
     #print vault.retrieve_inventory(sns_topic=snsTopic)
     #vault = glacier_connection.create_vault("")
