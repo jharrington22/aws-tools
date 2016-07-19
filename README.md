@@ -69,6 +69,29 @@ optional arguments:
 
 *When specifying either instance name (-n) or instance ID (-i) ec2_snapshot.py will snapshot all volumes attached to the associated instance. 
 
+##### s3_generate_temp_url.py
+
+A tool to quickly return a temporary URL for a S3 object. You can set the `--expiry` in seconds. 
+
+##### Usage
+
+
+```
+usage: s3_generate_temp_url.py [-h] [-f FILE_NAME] [-e EXPIRY] [-b BUCKET]
+
+AWS S3 generate temporary URL for S3 Object
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -f FILE_NAME, --file-name FILE_NAME
+                        S3 file (Object) name
+  -e EXPIRY, --expiry EXPIRY
+                        Expiry time of URL in seconds
+  -b BUCKET, --bucket BUCKET
+                        S3 Bucket name
+```
+
+
 ##### Credentials 
 
 There are 3 ways you can provide credentails to ec2_snapshot.py
