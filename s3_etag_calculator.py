@@ -17,8 +17,6 @@ if __name__ == "__main__":
 
     UPLOAD_MAX_SIZE = 8 * 1024 * 1024
     UPLOAD_MAX_PART_SIZE = 8 * 1024 * 1024
-    print(UPLOAD_MAX_PART_SIZE)
-    print(type(UPLOAD_MAX_PART_SIZE))
 
     SOURCE_FILE = arguments.source_file
     SOURCE_FILE_SIZE = os.path.getsize(SOURCE_FILE)
