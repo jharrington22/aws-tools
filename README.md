@@ -27,7 +27,7 @@ eg. Create a snapshot of an instance named "ProductionInstance" and keep 7 days 
 python ec2_snapshot.py -a ${AWS_ACCESS_KEY} -s ${AWS_SECRET_KEY} -r ap-southeast-2 -c -n ProductionInstance --daily 7
 ```
 
-# Usage
+## Usage
 
 ```
 usage: ec2_snapshot.py [options]
@@ -69,11 +69,11 @@ optional arguments:
 
 *When specifying either instance name (-n) or instance ID (-i) ec2_snapshot.py will snapshot all volumes attached to the associated instance. 
 
-##### s3_generate_temp_url.py
+#### s3_generate_temp_url.py
 
 A tool to quickly return a temporary URL for a S3 object. You can set the `--expiry` in seconds. 
 
-##### Usage
+## Usage
 
 
 ```
