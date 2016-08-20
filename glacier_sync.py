@@ -89,7 +89,7 @@ def get_job_status(instance, job_id, vault_name, archive_json):
         job_instance = False
         active_jobs = False
         print("%s is no longer active" % job_id)
-        if not archive_json is None:
+        if archive_json is not None:
             change_job_status(archive_json, job_id, "complete")
     return job_instance
 
@@ -102,6 +102,7 @@ def check_cached_jobs():
     """Check status of job's in cache file"""
     pass
 
+
 def get_vault(instance, vault_name):
     vault = instance.get_vault(vault_name)
     return vault
@@ -111,8 +112,8 @@ def check_job_id(instance, vault_name, job_id=None, archive_json=None):
     """Get Jobs status using layer1 boto connection"""
     active_jobs = False
     if job_id is None:
-    # Check job status
-        if not archive_json is None:
+        # Check job status
+        if archive_json is not None:
             for jobs in archive_json["jobs"]:
                 if jobs["status"] == "active":
                     active_jobs = True
@@ -168,6 +169,7 @@ def update_job_glacier_archive(job_dict, glacier_archive):
     glacier_archive["jobs"].append(job_dict)
     return glacier_archive
 
+
 def main():
     # Get regions
     regions = glacier.regions()
@@ -177,18 +179,17 @@ def main():
 
     glacier_layer2 = boto.glacier.layer2.Layer2(aws_access_key, aws_secret_key, region=regions[2])
 
-
     # Vault name
     vault = glacier_layer2.get_vault(args.vault_name)
 
     # SNS Topic
     sns_topic = args.sns_topic
-    
-    #print glacier_layer1.list_vaults()["VaultList"][0]
 
-    #print check_job_id(glacier_layer2)
+    # print glacier_layer1.list_vaults()["VaultList"][0]
 
-    #print glacier_connection.list_vaults()
+    # print check_job_id(glacier_layer2)
+
+    # print glacier_connection.list_vaults()
 
     # glacier_archive = load_archive_data(cache_file)
 
@@ -203,35 +204,34 @@ def main():
     # Set Job ID
     # job_id = args.job_id
 
-    #print(glacier_archive)
+    # print(glacier_archive)
 
     # if not job_id is None:
     #     print("Job to check: %s" % job_id)
     #     if check_job_id(glacier_layer1, vault_name, job_id=job_id):
     #         get_job(glacier_layer1, vault_name, job_id)
-    # 
-    # 
+    #
     # if args.check_jobs:
     #     check_job_id(glacier_layer1, vault_name, archive_json=glacier_archive)
-    
+
     if args.list_inventory:
         request_vault_inventory(vault, sns_topic)
 
     if args.check_job:
         print("Checking jobs")
         print vault.list_jobs()
-    #print json.dumps(check_job_id(glacier_instance, vault_name, job_id), indent=2)
+    # print json.dumps(check_job_id(glacier_instance, vault_name, job_id), indent=2)
 
-    #print vault.get_job("rnTR1mM1ChN8MPexEllGKqsiRfVJkfjE5vLqVzwcuRha2YbZ4afXDDt9d4N8MPexEllGKqsEMYO7AzMEpQ")
+    # print vault.get_job("rnTR1mM1ChN8MPexEllGKqsiRfVJkfjE5vLqVzwcuRha2YbZ4afXDDt9d4N8MPexEllGKqsEMYO7AzMEpQ")
 
-    #print vault.upload_archive(file)
+    # print vault.upload_archive(file)
 
     # save_archive_data(glacier_archive, cache_file)
 
-    #print vault.retrieve_inventory(sns_topic=snsTopic)
-    #vault = glacier_connection.create_vault("")
+    # print vault.retrieve_inventory(sns_topic=snsTopic)
+    # vault = glacier_connection.create_vault("")
 
-    #print vault
+    # print vault
 
 if __name__ == "__main__":
     main()
