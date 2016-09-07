@@ -18,11 +18,9 @@ def update_progress(progress):
     """
         Progress bar to be used with create_snapshot()
     """
-    barLength = 100 # Modify this to change the length of the progress bar
-    status = ""
+    barLength = 100  # Modify this to change the length of the progress bar
     if not isinstance(progress, int):
         progress = 0
-        status = "error: progress var must be int\r\n"
     block = progress
     if not progress == float(100):
         text = "\rPercent: [{0}] {1}%".format("#"*block + "-"*(barLength-block), progress)
@@ -56,7 +54,8 @@ def get_volumes_from_instance(conn, instance_id):
     return _attached_volumes
 
 
-def create_snapshot(conn, instance_id=None, volume_id=None, instance_name=None, snapshot_name=None, progress=None, description_format=None, retention=None):
+def create_snapshot(conn, instance_id=None, volume_id=None, instance_name=None,
+                    snapshot_name=None, progress=None, description_format=None, retention=None):
     """
         Create snapshot using instance name or volume id
         Appends datetime (UTC) to instance name
@@ -69,6 +68,7 @@ def create_snapshot(conn, instance_id=None, volume_id=None, instance_name=None, 
         retention = dict with retention period and delta
     """
     _datetime = datetime.utcnow().strftime("%Y-%m-%d-%H:%M:%S")
+
     # Create snapshot for each attached volume
     def progress_output(snapshot):
         while not snapshot.status == "completed":
@@ -76,6 +76,7 @@ def create_snapshot(conn, instance_id=None, volume_id=None, instance_name=None, 
             if not snapshot.progress == "":
                 update_progress(int(snapshot.progress.strip("%")))
             time.sleep(1)
+
     def snapshot_volume(_volume, _identifier, _snapshot_name=None):
         """
             _volume = volume instance
@@ -86,7 +87,8 @@ def create_snapshot(conn, instance_id=None, volume_id=None, instance_name=None, 
             # Description format enables snapshot retention
             if description_format:
                 _description_format = description_format.split("_")
-                _description = _description_format[0] + "_" + retention["period"] + "_" + _identifier + "_" + _volume.attach_data.device + "_" + _datetime
+                _description = _description_format[0] + "_" + retention["period"] + "_" +\
+                    _identifier + "_" + _volume.attach_data.device + "_" + _datetime
                 # Remove time for snapshot name
                 _snapshot_name = "_".join(_description.split("_")[:4])
             else:
@@ -95,7 +97,8 @@ def create_snapshot(conn, instance_id=None, volume_id=None, instance_name=None, 
         else:
             if description_format:
                 _description_format = description_format.split("_")
-                _description = _description_format[0] + "_" + retention["period"] + "_" + _snapshot_name + "_" + _volume.attach_data.device + "_" + _datetime
+                _description = _description_format[0] + "_" + retention["period"] + "_" +\
+                    _snapshot_name + "_" + _volume.attach_data.device + "_" + _datetime
             else:
                 _description = _snapshot_name
         # Create snapshot
@@ -190,7 +193,7 @@ def snapshot_retention(description_format, identifier, retention):
     # Build a list of volumes in the available snapshots
     for snapshot in del_snapshots:
         _device = snapshot.description.split("_")[3]
-        if not _device in available_volumes:
+        if _device not in available_volumes:
             available_volumes.append(_device)
     if len(available_volumes) > 1:
         print("%s has %s volumes attached" % (identifier, len(available_volumes)))
@@ -209,8 +212,9 @@ def snapshot_retention(description_format, identifier, retention):
         else:
             delete = 0
         print("Available snapshots for volume %s: %s" % (_volume, len(_del_snapshots)))
-        print("Snapshots available to delete: %s, Number of snapshots to keep: %s, Number of snapshots to delete: %s, Device: %s") % (len(_del_snapshots), retention[retention["period"]], delete, _volume)
-        #print("Available snapshots to delete (ID's): %s" % _del_snapshots)
+        print("Snapshots available to delete: %s, Number of snapshots to keep: %s, Number of snapshots to delete: %s,\
+              Device: %s") % (len(_del_snapshots), retention[retention["period"]], delete, _volume)
+        # print("Available snapshots to delete (ID's): %s" % _del_snapshots)
         print("Deleting snapshots..")
         for i in range(delete):
             _del_snapshots[i].delete()
@@ -246,9 +250,11 @@ if __name__ == "__main__":
     parser.add_argument("--snapshot-delete", action="store", help="Delete snapshot [optional]")
     parser.add_argument("--snapshot-info", action="store_true", help="Output information on snapshot ID [optional]")
     # Diagnostics
-    parser.add_argument("--list-instances", "-l", action="store_true", help="List all instances with associated account [optional]")
+    parser.add_argument("--list-instances", "-l", action="store_true",
+                        help="List all instances with associated account [optional]")
     parser.add_argument("--verbose", "-v", action="store_true", help="More verbose output [optional]")
-    parser.add_argument("--progress", "-p", action="store_true", help="Output a progress bar when taking snapshot [optional]")
+    parser.add_argument("--progress", "-p", action="store_true",
+                        help="Output a progress bar when taking snapshot [optional]")
     arguments = parser.parse_args()
 
     # Load local config file location if it exists
@@ -274,7 +280,8 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # Make EC2 Connection
-    conn = boto.ec2.EC2Connection(aws_access_key_id=arguments.access_id, aws_secret_access_key=arguments.secret_key, region=arguments.region)
+    conn = boto.ec2.EC2Connection(aws_access_key_id=arguments.access_id, aws_secret_access_key=arguments.secret_key,
+                                  region=arguments.region)
 
     # Return a list of instances
     if arguments.list_instances:
@@ -292,9 +299,10 @@ if __name__ == "__main__":
 
     # Volume id OR instance name must be specified
     if not arguments.volume_id and not arguments.instance_name and not arguments.instance_id:
-        print("Error: %s: Volume ID (--volume-id), Instance ID (--instance-id) or Instance Name (-n) must be specified.\n" % sys.argv[0].split("/")[-1])
-        #print(parser.print_help())
-        #sys.exit(1)
+        print("Error: %s: Volume ID (--volume-id), Instance ID (--instance-id) or Instance Name (-n)\
+              must be specified.\n" % sys.argv[0].split("/")[-1])
+        # print(parser.print_help())
+        # sys.exit(1)
 
     # Create snapshot
     if arguments.snapshot_create:
