@@ -8,6 +8,7 @@ import ConfigParser
 from datetime import datetime
 
 LOG_LEVEL = "INFO"
+MAX_RETRY = 3
 
 
 def return_region(region_name):
@@ -37,14 +38,24 @@ def get_instance_id_from_instance_name(conn, instance_name):
     """
         Return instance object from "name" tag
     """
-    try:
-        _instance = conn.get_all_reservations(filters={"tag:Name": instance_name})[0].instances[0]
-    except IndexError:
-        logging.error("No instnace with name: %s\n try -l to list instance names", instance_name)
-        sys.exit(1)
-    except boto.exception, e:
-        logging.error("Unable to connect to AWS: %s", e)
-        sys.exit(1)
+    _retry_count = 0
+    while True:
+        try:
+            _instance = conn.get_all_reservations(filters={"tag:Name": instance_name})[0].instances[0]
+            break
+        except IndexError:
+            logging.error("No instance with name: %s\n try -l to list instance names", instance_name)
+            sys.exit(1)
+        except (boto.exception.AWSConnectionError, boto.exception.BotoServerError), e:
+            if MAX_RETRY > _retry_count:
+                logging.info("Can't connect to AWS, retrying..")
+            else:
+                logging.error("Unable to connect to AWS: %s", e)
+                sys.exit(1)
+            _retry_count += 1
+        except boto.exception, e:
+            logging.error("Unable to connect to AWS: %s", e)
+            sys.exit(1)
     return {"Name": instance_name, "instance": _instance}
 
 
@@ -52,12 +63,20 @@ def get_volumes_from_instance(conn, instance_id):
     """
         Return a volume instance
     """
+    _retry_count = 0
     try:
         _volumes = conn.get_all_volumes()
         _attached_volumes = []
         for volume in _volumes:
             if volume.attach_data.instance_id == instance_id:
                 _attached_volumes.append(volume)
+    except (boto.exception.AWSConnectionError, boto.exception.BotoServerError), e:
+        if MAX_RETRY > _retry_count:
+            logging.info("Can't connect to AWS, retrying..")
+        else:
+            logging.error("Unable to connect to AWS: %s", e)
+            sys.exit(1)
+        _retry_count += 1
     except boto.exception, e:
         logging.error("Unable to connect to AWS: %s", e)
         sys.exit(1)
@@ -78,6 +97,7 @@ def create_snapshot(conn, instance_id=None, volume_id=None, instance_name=None,
         retention = dict with retention period and delta
     """
     _datetime = datetime.utcnow().strftime("%Y-%m-%d-%H:%M:%S")
+    _retry_count = 0
 
     # Create snapshot for each attached volume
     def progress_output(snapshot):
@@ -93,6 +113,7 @@ def create_snapshot(conn, instance_id=None, volume_id=None, instance_name=None,
             _identifier = Always set either volume_id, instance_id, instance_name
             _snapshot_name = Set if specified on command line
         """
+        _retry_count = 0
         if not _snapshot_name:
             # Description format enables snapshot retention
             if description_format:
@@ -114,6 +135,13 @@ def create_snapshot(conn, instance_id=None, volume_id=None, instance_name=None,
         # Create snapshot
         try:
             snapshot = conn.create_snapshot(_volume.id, description=_description)
+        except (boto.exception.AWSConnectionError, boto.exception.BotoServerError), e:
+            if MAX_RETRY > _retry_count:
+                logging.info("Can't connect to AWS, retrying..")
+            else:
+                logging.error("Unable to connect to AWS: %s", e)
+                sys.exit(1)
+            _retry_count += 1
         except boto.exception, e:
             logging.error("Unable to connect to AWS: %s", e)
             sys.exit(1)
@@ -131,6 +159,13 @@ def create_snapshot(conn, instance_id=None, volume_id=None, instance_name=None,
         except boto.exception.EC2ResponseError:
             logging.error("No Volume ID: %s", volume_id)
             sys.exit(1)
+        except (boto.exception.AWSConnectionError, boto.exception.BotoServerError), e:
+            if MAX_RETRY > _retry_count:
+                logging.info("Can't connect to AWS, retrying..")
+            else:
+                logging.error("Unable to connect to AWS: %s", e)
+                sys.exit(1)
+            _retry_count += 1
         except boto.execption, e:
             logging.error("Unable to connect to AWS: %s", e)
             sys.exit(1)
@@ -142,6 +177,13 @@ def create_snapshot(conn, instance_id=None, volume_id=None, instance_name=None,
         except boto.exception.EC2ResponseError:
             logging.error("No Instance ID: %s", instance_id)
             sys.exit(1)
+        except (boto.exception.AWSConnectionError, boto.exception.BotoServerError), e:
+            if MAX_RETRY > _retry_count:
+                logging.info("Can't connect to AWS, retrying..")
+            else:
+                logging.error("Unable to connect to AWS: %s", e)
+                sys.exit(1)
+            _retry_count += 1
         except boto.execption, e:
             logging.error("Unable to connect to AWS: %s", e)
             sys.exit(1)
@@ -170,15 +212,30 @@ def list_instance_details(verbose=False, instance_name=None):
     ID - Instance ID
     Volumes - List of volume IDs
     """
+    _retry_count = 0
     if instance_name:
         try:
             _reservations = conn.get_all_reservations(filters={"tag:Name": instance_name})
+        except (boto.exception.AWSConnectionError, boto.exception.BotoServerError), e:
+            if MAX_RETRY > _retry_count:
+                logging.info("Can't connect to AWS, retrying..")
+            else:
+                logging.error("Unable to connect to AWS: %s", e)
+                sys.exit(1)
+            _retry_count += 1
         except boto.exception, e:
             logging.error("Erorr connecting to AWS: %s", e)
             sys.exit(1)
     else:
         try:
             _reservations = conn.get_all_reservations()
+        except (boto.exception.AWSConnectionError, boto.exception.BotoServerError), e:
+            if MAX_RETRY > _retry_count:
+                logging.info("Can't connect to AWS, retrying..")
+            else:
+                logging.error("Unable to connect to AWS: %s", e)
+                sys.exit(1)
+            _retry_count += 1
         except boto.exception, e:
             logging.error("Erorr connecting to AWS: %s", e)
     for reservation in _reservations:
@@ -200,6 +257,8 @@ def snapshot_retention(description_format, identifier, retention):
     identifier = instance name, volume id, instance id
     retention = dict of period and time delta
     """
+    _retry_count = 0
+
     def date_compare(snap1, snap2):
         """ Sort snapshots oldest to newest """
         if snap1.start_time < snap2.start_time:
@@ -209,6 +268,13 @@ def snapshot_retention(description_format, identifier, retention):
         return 1
     try:
         snapshots = conn.get_all_snapshots()
+    except (boto.exception.AWSConnectionError, boto.exception.BotoServerError), e:
+        if MAX_RETRY > _retry_count:
+            logging.info("Can't connect to AWS, retrying..")
+        else:
+            logging.error("Unable to connect to AWS: %s", e)
+            sys.exit(1)
+        _retry_count += 1
     except boto.exception, e:
         logging.error("Unable to connect to AWS: %s", e)
         sys.exit(1)
@@ -254,8 +320,16 @@ def snapshot_retention(description_format, identifier, retention):
 
 
 def get_instance_tags(instance_id):
+    _retry_count = 0
     try:
         _tags = conn.get_all_tags({'resource-id': instance_id})
+    except (boto.exception.AWSConnectionError, boto.exception.BotoServerError), e:
+        if MAX_RETRY > _retry_count:
+            logging.info("Can't connect to AWS, retrying..")
+        else:
+            logging.error("Unable to connect to AWS: %s", e)
+            sys.exit(1)
+        _retry_count += 1
     except boto.exception, e:
         logging.error("Unable to connect to AWS: %s", e)
         sys.exit(1)
@@ -325,10 +399,18 @@ if __name__ == "__main__":
         logging.error("No region name")
         sys.exit(1)
 
+    retry_count = 0
     # Make EC2 Connection
     try:
         conn = boto.ec2.EC2Connection(aws_access_key_id=arguments.access_id, aws_secret_access_key=arguments.secret_key,
                                       region=arguments.region)
+    except (boto.exception.AWSConnectionError, boto.exception.BotoServerError), e:
+        if MAX_RETRY > retry_count:
+            logging.info("Can't connect to AWS, retrying..")
+        else:
+            logging.error("Unable to connect to AWS: %s", e)
+            sys.exit(1)
+        retry_count += 1
     except boto.exception, e:
         logging.error("Unable to connect to AWS: %s", e)
 
