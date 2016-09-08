@@ -1,10 +1,13 @@
 import os
 import sys
 import time
+import logging
 import boto.ec2
 import argparse
 import ConfigParser
 from datetime import datetime
+
+LOG_LEVEL = "INFO"
 
 
 def return_region(region_name):
@@ -37,7 +40,10 @@ def get_instance_id_from_instance_name(conn, instance_name):
     try:
         _instance = conn.get_all_reservations(filters={"tag:Name": instance_name})[0].instances[0]
     except IndexError:
-        print("No instnace with name: %s\n try -l to list instance names" % instance_name)
+        logging.error("No instnace with name: %s\n try -l to list instance names", instance_name)
+        sys.exit(1)
+    except boto.exception, e:
+        logging.error("Unable to connect to AWS: %s", e)
         sys.exit(1)
     return {"Name": instance_name, "instance": _instance}
 
@@ -46,11 +52,15 @@ def get_volumes_from_instance(conn, instance_id):
     """
         Return a volume instance
     """
-    _volumes = conn.get_all_volumes()
-    _attached_volumes = []
-    for volume in _volumes:
-        if volume.attach_data.instance_id == instance_id:
-            _attached_volumes.append(volume)
+    try:
+        _volumes = conn.get_all_volumes()
+        _attached_volumes = []
+        for volume in _volumes:
+            if volume.attach_data.instance_id == instance_id:
+                _attached_volumes.append(volume)
+    except boto.exception, e:
+        logging.error("Unable to connect to AWS: %s", e)
+        sys.exit(1)
     return _attached_volumes
 
 
@@ -102,12 +112,16 @@ def create_snapshot(conn, instance_id=None, volume_id=None, instance_name=None,
             else:
                 _description = _snapshot_name
         # Create snapshot
-        snapshot = conn.create_snapshot(_volume.id, description=_description)
+        try:
+            snapshot = conn.create_snapshot(_volume.id, description=_description)
+        except boto.exception, e:
+            logging.error("Unable to connect to AWS: %s", e)
+            sys.exit(1)
         # TODO: Do i need to wait here?
         time.sleep(5)
         # Add snapshot name
         snapshot.add_tag("Name", _snapshot_name)
-        print("Creating snapshot: %s" % snapshot)
+        logging.info("Creating snapshot: %s", snapshot)
         if progress:
             progress_output(snapshot)
     # Create snapshot
@@ -115,7 +129,10 @@ def create_snapshot(conn, instance_id=None, volume_id=None, instance_name=None,
         try:
             _volume = conn.get_all_volumes([volume_id])
         except boto.exception.EC2ResponseError:
-            print("ERROR: No Volume ID: %s" % volume_id)
+            logging.error("No Volume ID: %s", volume_id)
+            sys.exit(1)
+        except boto.execption, e:
+            logging.error("Unable to connect to AWS: %s", e)
             sys.exit(1)
         identifier = volume_id
         snapshot_volume(_volume[0], identifier, snapshot_name)
@@ -123,7 +140,10 @@ def create_snapshot(conn, instance_id=None, volume_id=None, instance_name=None,
         try:
             instance = conn.get_only_instances([instance_id])[0]
         except boto.exception.EC2ResponseError:
-            print("ERROR: No Instance ID: %s" % instance_id)
+            logging.error("No Instance ID: %s", instance_id)
+            sys.exit(1)
+        except boto.execption, e:
+            logging.error("Unable to connect to AWS: %s", e)
             sys.exit(1)
         _volumes = get_volumes_from_instance(conn, instance.id)
         identifier = instance.id
@@ -136,7 +156,7 @@ def create_snapshot(conn, instance_id=None, volume_id=None, instance_name=None,
         for volume in _volumes:
             snapshot_volume(volume, identifier, snapshot_name)
     else:
-        print("Not enough arguments for create_snapshot()")
+        logging.error("Not enough arguments for create_snapshot()")
         sys.exit(1)
     # Run backup retention
     if description_format:
@@ -151,9 +171,16 @@ def list_instance_details(verbose=False, instance_name=None):
     Volumes - List of volume IDs
     """
     if instance_name:
-        _reservations = conn.get_all_reservations(filters={"tag:Name": instance_name})
+        try:
+            _reservations = conn.get_all_reservations(filters={"tag:Name": instance_name})
+        except boto.exception, e:
+            logging.error("Erorr connecting to AWS: %s", e)
+            sys.exit(1)
     else:
-        _reservations = conn.get_all_reservations()
+        try:
+            _reservations = conn.get_all_reservations()
+        except boto.exception, e:
+            logging.error("Erorr connecting to AWS: %s", e)
     for reservation in _reservations:
         tag = get_instance_tags(reservation.instances[0].id)
         if verbose:
@@ -180,7 +207,11 @@ def snapshot_retention(description_format, identifier, retention):
         elif snap1.start_time == snap2.start_time:
             return 0
         return 1
-    snapshots = conn.get_all_snapshots()
+    try:
+        snapshots = conn.get_all_snapshots()
+    except boto.exception, e:
+        logging.error("Unable to connect to AWS: %s", e)
+        sys.exit(1)
     del_snapshots = []
     for snapshot in snapshots:
         if snapshot.description.startswith("aws-tools"):
@@ -196,7 +227,7 @@ def snapshot_retention(description_format, identifier, retention):
         if _device not in available_volumes:
             available_volumes.append(_device)
     if len(available_volumes) > 1:
-        print("%s has %s volumes attached" % (identifier, len(available_volumes)))
+        logging.info("%s has %s volumes attached", identifier, len(available_volumes))
     # Build a list of snapshots to delete based on device name (Handles instance that have more than 1 device)
     for _volume in available_volumes:
         _del_snapshots = []
@@ -211,18 +242,23 @@ def snapshot_retention(description_format, identifier, retention):
             delete = len(_del_snapshots) - retention[retention["period"]]
         else:
             delete = 0
-        print("Available snapshots for volume %s: %s" % (_volume, len(_del_snapshots)))
-        print("Snapshots available to delete: %s, Number of snapshots to keep: %s, Number of snapshots to delete: %s,\
-              Device: %s") % (len(_del_snapshots), retention[retention["period"]], delete, _volume)
-        # print("Available snapshots to delete (ID's): %s" % _del_snapshots)
-        print("Deleting snapshots..")
+        logging.info("Available snapshots for volume %s: %s", _volume, len(_del_snapshots))
+        logging.info("Snapshots available to delete: %s, Number of snapshots to keep: %s,\
+              Number of snapshots to delete: %s, Device: %s", len(_del_snapshots), retention[retention["period"]],
+                     delete, _volume)
+        logging.debug("Available snapshots to delete (ID's): %s", _del_snapshots)
+        logging.info("Deleting snapshots..")
         for i in range(delete):
             _del_snapshots[i].delete()
-            print("\tDeleted: %s" % _del_snapshots[i])
+            logging.info("Deleted: %s", _del_snapshots[i])
 
 
 def get_instance_tags(instance_id):
-    _tags = conn.get_all_tags({'resource-id': instance_id})
+    try:
+        _tags = conn.get_all_tags({'resource-id': instance_id})
+    except boto.exception, e:
+        logging.error("Unable to connect to AWS: %s", e)
+        sys.exit(1)
     for tag in _tags:
         if not tag.name.startswith('aws:'):
             return {tag.name: tag.value}
@@ -243,7 +279,7 @@ if __name__ == "__main__":
     parser.add_argument("--volume-id", "-i", action="store", help="Volume ID [optional]")
     parser.add_argument("--instance-id", action="store", help="EC2 Instance ID [optional]")
     parser.add_argument("--instance-name", "-n", action="store", help="EC2 Instance Name [optional]")
-    parser.add_argument("--region", "-r", action="store", help="AWS Region [optional]")
+    parser.add_argument("--region", "-r", action="store", required=True, help="AWS Region [required]")
     # Snapshot options
     parser.add_argument("--snapshot-create", "-c", action="store_true", help="Create a snapshot [optional]")
     parser.add_argument("--snapshot-name", action="store", help="Specify a custom name for your snapshot [optional]")
@@ -255,7 +291,17 @@ if __name__ == "__main__":
     parser.add_argument("--verbose", "-v", action="store_true", help="More verbose output [optional]")
     parser.add_argument("--progress", "-p", action="store_true",
                         help="Output a progress bar when taking snapshot [optional]")
+    parser.add_argument("--log", help="Logging level - DEBUG|INFO|WARNING|ERROR|CRITICAL [optional]")
     arguments = parser.parse_args()
+
+    # Setup logging
+    log_level = LOG_LEVEL
+
+    # logging.debug("Log level: %s", LOG_LEVEL)
+    if arguments.log is not None:
+        log_level = arguments.log.upper()
+
+    logging.basicConfig(format='%(levelname)s:%(message)s', level=getattr(logging, log_level))
 
     # Load local config file location if it exists
     # Prefers command line arguments to config file if specified
@@ -270,18 +316,21 @@ if __name__ == "__main__":
         if not arguments.secret_key:
             arguments.secret_key = config.get("awsCredentials", 'accessSecret')
     except IOError:
-        print("Warning: No configuration file: %s\n" % config_file)
+        logging.info("Warning: No configuration file: %s\n", config_file)
 
     # Set region
     if arguments.region:
         arguments.region = return_region(arguments.region)
     else:
-        print("Error: No region name")
+        logging.error("No region name")
         sys.exit(1)
 
     # Make EC2 Connection
-    conn = boto.ec2.EC2Connection(aws_access_key_id=arguments.access_id, aws_secret_access_key=arguments.secret_key,
-                                  region=arguments.region)
+    try:
+        conn = boto.ec2.EC2Connection(aws_access_key_id=arguments.access_id, aws_secret_access_key=arguments.secret_key,
+                                      region=arguments.region)
+    except boto.exception, e:
+        logging.error("Unable to connect to AWS: %s", e)
 
     # Return a list of instances
     if arguments.list_instances:
@@ -290,19 +339,17 @@ if __name__ == "__main__":
                 for key in instance_dict.keys():
                     if key == "Volumes":
                         for volume in instance_dict[key]:
-                            print "Volume: %s, Device: %s" % (volume.id, volume.attach_data.device)
+                            logging.info("Volume: %s, Device: %s", volume.id, volume.attach_data.device)
                     else:
-                        print "%s: %s" % (key, instance_dict[key])
+                        logging.info("%s: %s", key, instance_dict[key])
             else:
-                print instance_dict["Name"]
+                logging.info("%s", instance_dict["Name"])
         sys.exit(0)
 
     # Volume id OR instance name must be specified
     if not arguments.volume_id and not arguments.instance_name and not arguments.instance_id:
-        print("Error: %s: Volume ID (--volume-id), Instance ID (--instance-id) or Instance Name (-n)\
-              must be specified.\n" % sys.argv[0].split("/")[-1])
-        # print(parser.print_help())
-        # sys.exit(1)
+        logging.error("%s: Volume ID (--volume-id), Instance ID (--instance-id) or Instance Name (-n)\
+              must be specified.\n", sys.argv[0].split("/")[-1])
 
     # Create snapshot
     if arguments.snapshot_create:
@@ -327,7 +374,7 @@ if __name__ == "__main__":
             retention_format = None
             retention = None
         if arguments.instance_name:
-            print("Create snapshot from instance name: %s" % arguments.instance_name)
+            logging.info("Create snapshot from instance name: %s", arguments.instance_name)
             # Create snapshot with retention
             create_snapshot(conn,
                             instance_name=arguments.instance_name,
@@ -335,18 +382,18 @@ if __name__ == "__main__":
                             retention=retention
                             )
         if arguments.volume_id:
-            print("Create snapshot from volume id: %s" % arguments.volume_id)
+            logging.info("Create snapshot from volume id: %s", arguments.volume_id)
             create_snapshot(conn,
                             volume_id=arguments.volume_id,
                             description_format=retention_format,
                             retention=retention
                             )
         if arguments.instance_id:
-            print("Create snapshot from volume id: %s" % arguments.instance_id)
+            logging.info("Create snapshot from volume id: %s", arguments.instance_id)
             create_snapshot(conn,
                             instance_id=arguments.instance_id,
                             description_format=retention_format,
                             retention=retention
                             )
     else:
-        print("Not creating snapshot")
+        logging.info("Not creating snapshot")
