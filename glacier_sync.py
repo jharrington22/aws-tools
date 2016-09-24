@@ -16,8 +16,9 @@ parser = argparse.ArgumentParser(description='AWS Glacier tool')
 parser.add_argument('-c', '--check-job', action="store", help="Check specified job ID")
 parser.add_argument('-r', action="store_true", dest="retrieve_job_status")
 parser.add_argument('-j', action="store", dest="job_id")
-parser.add_argument('-v', '--vault-name', required=True, action="store", help="Valut name")
+parser.add_argument('-v', '--vault-name', action="store", help="Valut name")
 parser.add_argument('-l', '--list-inventory', action="store_true", help="List inventory")
+parser.add_argument('--list-vaults', action="store_true", help="List Vaults")
 parser.add_argument('-s', '--sns-topic', action="store", help="SNS Topic")
 
 args = parser.parse_args()
@@ -46,6 +47,8 @@ class RetrieveJob():
 
         self.local_cache_file = os.path.expanduser('~/.glacier_sync_cache.cfg')
 
+        self.region = region
+
         if vault_name:
             self.vault = self.conn.get_vault(vault_name)
             if job_id:
@@ -58,7 +61,7 @@ class RetrieveJob():
 
         self.job_status()
         cache = self.load_archive_data()
-        print json.dumps(cache)
+        # print json.dumps(cache)
 
     def load_archive_data(self, archive_json_file="asdlfkjsdf"):
         """Load archive data from json file"""
@@ -67,7 +70,7 @@ class RetrieveJob():
                 result = json.load(archive_json_file_fp)
                 return result
         else:
-            print("Loading json template..")
+            # print("Loading json template..")
             result = {
                 "jobs": [{
                     "id": "wEOZmsdfKBfaHbr_wLHMrlXqIamtUALhudsfaUmsldfmwMsMiN8MPexEllGKqsfxF7hShjR",
@@ -152,6 +155,10 @@ class RetrieveJob():
             with open(json_file, 'r') as json_fp:
                 result = json.load(json_fp)
                 return result
+
+    def list_vaults(self):
+        print("Listing vaults for {}".format(self.region))
+        print(self.conn.list_vaults())
 
 
 def create_job_dict(id, created, status, job_type, completed):
@@ -260,13 +267,21 @@ def main():
     # sns_topic = args.sns_topic
 
     job = RetrieveJob(vault_name="JanetBuskes", region=regions[2])
+    # for region in regions:
+    #     if region.name not in ["cn-north-1", "us-gov-west-1"]:
+    #         job = RetrieveJob(region=region)
+    #         if args.list_vaults:
+    #             job.list_vaults()
 
     print "Completed Jobs: {}".format(job.completed_jobs)
     print "Active Jobs: {}".format(job.active_jobs)
 
     job.check_inventory()
 
-    # job.request_inventory()
+    if args.list_vaults:
+        job.list_vaults()
+
+    job.request_inventory()
 
     # print glacier_layer1.list_vaults()["VaultList"][0]
 
