@@ -286,7 +286,8 @@ def snapshot_retention(description_format, identifier, retention):
             if retention_details["PERIOD"] == retention["period"] and retention_details["INSTANCE"] == identifier:
                 del_snapshots.append(snapshot)
     available_volumes = []
-    # Match period, instance and device (otherwise for instances with more than one device all devices would be considered)
+    # Match period, instance and device (otherwise for instances with more than one
+    # device all devices would be considered)
     # Build a list of volumes in the available snapshots
     for snapshot in del_snapshots:
         _device = snapshot.description.split("_")[3]
