@@ -1,6 +1,8 @@
 aws-tools
 =========
 
+[![Build Status](https://travis-ci.org/jharrington22/aws-tools.svg?branch=master)](https://travis-ci.org/jharrington22/aws-tools)
+
 Collection of AWS scripts written in python making use of boto.
 
 All scripts require boto to be installed:
