@@ -1,8 +1,7 @@
 #!/usr/bin/python
 
-from boto.s3.connection import S3Connection
+# from boto.s3.connection import S3Connection
 import ConfigParser
-import logging
 import hashlib
 import json
 import sys
@@ -21,7 +20,7 @@ config.readfp(open(configFile))
 aws_access_key = config.get("awsCredentials", 'accessKey')
 aws_secret_key = config.get("awsCredentials", 'accessSecret')
 
-#log_file = config.get("log", "logPath")
+# log_file = config.get("log", "logPath")
 
 
 def md5_check(path, key):
@@ -97,9 +96,9 @@ def main():
 
     testDict = get_arguments()
 
-    conn = S3Connection(aws_access_key, aws_secret_key)
+    # conn = S3Connection(aws_access_key, aws_secret_key)
 
-    if testDict["source"].has_key("bucket"):
+    if "bucket" in testDict["source"]:
         print("Bucket for source is %s" % testDict["source"]["bucket"])
     else:
         print("Source has no specified bucket")
