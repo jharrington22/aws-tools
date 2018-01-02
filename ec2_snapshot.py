@@ -207,10 +207,10 @@ def create_snapshot(conn, instance_id=None, volume_id=None, instance_name=None,
 
 def list_instance_details(verbose=False, instance_name=None):
     """
-    Returns a tag or dict containing instance details
-    Name - Tag: Name
-    ID - Instance ID
-    Volumes - List of volume IDs
+        Returns a tag or dict containing instance details
+        Name - Tag: Name
+        ID - Instance ID
+        Volumes - List of volume IDs
     """
     _retry_count = 0
     if instance_name:
@@ -253,9 +253,9 @@ def list_instance_details(verbose=False, instance_name=None):
 
 
 def snapshot_retention(description_format, identifier, retention):
-    """````
-    identifier = instance name, volume id, instance id
-    retention = dict of period and time delta
+    """
+        identifier = instance name, volume id, instance id
+        retention = dict of period and time delta
     """
     _retry_count = 0
 
@@ -266,6 +266,7 @@ def snapshot_retention(description_format, identifier, retention):
         elif snap1.start_time == snap2.start_time:
             return 0
         return 1
+
     def get_all_snapshots(_retry_count):
         """ Recursive snapshot query """
         try:
