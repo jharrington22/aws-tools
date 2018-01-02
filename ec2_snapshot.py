@@ -266,18 +266,22 @@ def snapshot_retention(description_format, identifier, retention):
         elif snap1.start_time == snap2.start_time:
             return 0
         return 1
-    try:
-        snapshots = conn.get_all_snapshots()
-    except (boto.exception.AWSConnectionError, boto.exception.BotoServerError), e:
-        if MAX_RETRY > _retry_count:
-            logging.info("Can't connect to AWS, retrying..")
-        else:
-            logging.error("Unable to connect to AWS: %s", e)
-            sys.exit(1)
-        _retry_count += 1
-    except boto.exception, e:
-        logging.error("Unable to connect to AWS: %s", e)
-        sys.exit(1)
+    def get_all_snapshots(_retry_count):
+        """ Recursive snapshot query """
+        try:
+            snapshots = conn.get_all_snapshots()
+            return snapshots
+        except Exception, e:
+            if MAX_RETRY > _retry_count:
+                logging.info("Can't connect to AWS, retrying..")
+            else:
+                logging.error("Unable to connect to AWS after %s retries: %s", MAX_RETRY, e)
+                sys.exit(1)
+            _retry_count += 1
+            snapshots = get_all_snapshots(_retry_count)
+            return snapshots
+
+    snapshots = get_all_snapshots(_retry_count)
     del_snapshots = []
     for snapshot in snapshots:
         if snapshot.description.startswith("aws-tools"):
