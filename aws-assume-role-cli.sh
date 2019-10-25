@@ -7,7 +7,7 @@ usage() {
     -a         AWS Account ID (10 digit int)
     -s         AWS Assume role session name (Can be arbitrary, blank will create session name "assumeRoleScript")
     -p         AWS Profile, leave blank for none
-    -p         AWS Region leave blank for default us-east-1
+    -r         AWS Region leave blank for default us-east-1
 EOF
 }
 
