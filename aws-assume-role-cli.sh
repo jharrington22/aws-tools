@@ -7,7 +7,7 @@ usage() {
     -a         AWS Account ID (10 digit int)
     -s         AWS Assume role session name (Can be arbitrary, blank will create session name "assumeRoleScript")
     -p         AWS Profile, leave blank for none
-    -p         AWS Region leave blank for default us-east-1
+    -r         AWS Region leave blank for default us-east-1
 EOF
 }
 
@@ -51,7 +51,7 @@ while getopts ":a:s:p:r:h" opt; do
     done
 
 
-AWS_STS_SESSION_NAME="SREAdminCreateUser"
+AWS_STS_SESSION_NAME="$USER"
 
 if [ -z "$AWS_ACCOUNT_ID" ]; then
 	usage
